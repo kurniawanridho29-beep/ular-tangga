@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ular Tangga Edukasi — Embed</title>
+<style>
+  :root{--board-size:720px;--cell:60px}
+  body{font-family:Inter, system-ui, Arial; display:flex; justify-content:center; padding:20px; background:#f7fafc; color:#111}
+  .container{max-width:960px; width:100%}
+  h1{font-size:20px; margin-bottom:8px}
+  .game-wrap{display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap}
+  .board{width:var(--board-size); border:6px solid #fff; box-shadow:0 6px 20px rgba(2,6,23,0.08); background:#fff; padding:10px}
+  .grid{display:grid; grid-template-columns:repeat(10, var(--cell)); grid-auto-rows:var(--cell); gap:2px; user-select:none}
+  .cell{display:flex; align-items:flex-end; justify-content:flex-end; padding:6px; font-size:12px; background:linear-gradient(180deg,#fff,#fcfcff); border-radius:6px; position:relative}
+  .cell[data-snake-head="true"]{background:linear-gradient(180deg,#ffecec,#fff); border:1px solid #ffd6d6}
+  .cell[data-ladder-start="true"]{background:linear-gradient(180deg,#ecfff0,#fff); border:1px solid #d6ffd6}
+  .piece{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+  .piece.player1{background:#3b82f6}
+  .controls{flex:1; min-width:240px}
+  .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:#111;color:#fff;text-decoration:none;cursor:pointer;margin-right:8px}
+  .info{margin-top:12px;background:#fff;padding:10px;border-radius:8px;box-shadow:0 4px 12px rgba(2,6,23,0.06)}
+  .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,10,20,0.5)}
+  .modal .card{background:#fff;padding:18px;border-radius:12px;max-width:720px;width:94%}
+  .answers{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .ans-btn{padding:8px 10px;border-radius:8px;border:1px solid #ddd;cursor:pointer;background:#fafafa;text-align:left}
+  .small{font-size:13px;color:#555}
+  .footer-note{font-size:12px;color:#666;margin-top:8px}
+  /* Responsive */
+  @media(max-width:900px){
+    .game-wrap{flex-direction:column;align-items:center}
+    .board{width:100%}
+    :root{--board-size:360px;--cell:36px}
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Ular Tangga Edukasi (Embed) — Demo</h1>
+    <div class="game-wrap">
+      <div class="board" id="boardWrap">
+        <div class="grid" id="grid"></div>
+      </div>
+
+      <div class="controls">
+        <div>
+          <button id="rollBtn" class="btn">🎲 Gulung Dadu</button>
+          <button id="resetBtn" class="btn" style="background:#ef4444">Reset</button>
+        </div>
+
+        <div class="info">
+          <div><strong>Giliran:</strong> <span id="turnText">Siswa 1</span></div>
+          <div class="small">Posisi siswa: <span id="posText">1</span></div>
+          <div class="footer-note">Klik kepala ular di papan untuk menjawab soal saat mendarat.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Soal -->
+  <div class="modal" id="modal">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong id="qTitle">Soal</strong>
+          <div class="small" id="qMeta">Kotak #</div>
+        </div>
+        <div><button id="closeModal" class="btn" style="background:#6b7280">Tutup</button></div>
+      </div>
+
+      <div id="qText" style="margin-top:12px">...</div>
+      <div class="answers" id="answers"></div>
+    </div>
+  </div>
+
+<script>
+/*
+  Uraian singkat:
+  - Grid 10x10 (100 kotak). Nomor 1 sampai 100.
+  - snakes: object with head->tail mapping.
+  - ladders: mapping start->end (opsional).
+  - SoalPool: per snakeHeadIndex, array of question objects {q, choices:[], answerIndex}
+  - Saat pemain mendarat di kotak yang adalah kepala ular, modal muncul menampilkan 1 soal acak dari pool.
+  - Jika jawab benar -> tetap. jika salah -> pindah ke ekor.
+  - Untuk menjual: ubah soalPool sesuai kebutuhan (bisa diambil dari external JSON).
+*/
+
+/* ======= KONFIGURASI MUDAH (edit di sini) ======= */
+
+/* definisi ular: head => tail */
+const SNAKES = {
+  16: 6,
+  48: 30,
+  62: 19,
+  88: 24,
+  95: 56,
+  97: 78
+};
+
+/* contoh tangga (opsional) start => end */
+const LADDERS = {
+  3: 22,
+  11: 28,
+  20: 29,
+  36: 55,
+  51: 72,
+  71: 92
+};
+
+/* pool soal: key = snake head index (string), value = array soal */
+let questionPool = {
+  "16": [
+    { q: "Apa fungsi norma hukum dalam masyarakat?", choices:["Menjaga ketertiban","Memberi contoh buruk","Mengurangi sanksi","Menyulitkan warga"], a:0 },
+    { q: "Pasal yang mengatur hak asasi umumnya ada di?", choices:["KUHP","UUD 1945","Peraturan desa","Peraturan sekolah"], a:1 }
+  ],
+  "48": [
+    { q: "Apa yang dimaksud HAM?", choices:["Hak yang dimiliki negara","Hak dasar manusia","Hanya hak warga negara","Hanya hak raja"], a:1 }
+  ],
+  "62": [
+    { q: "Contoh norma kesopanan adalah...", choices:["Menjaga kebersihan","Berteriak di kelas","Menghormati orang tua","Mencuri"], a:2 }
+  ],
+  "88": [
+    { q: "Siapa yang merumuskan Pancasila?", choices:["Soekarno","Sukarno & kolega","BPUPKI","Pembuat undang-undang"], a:2 }
+  ],
+  "95": [
+    { q: "Lembaga yang menjaga konstitusi di Indonesia adalah?", choices:["MPR","MK","KPK","POLRI"], a:1 }
+  ],
+  "97": [
+    { q: "Hak untuk memilih disebut?", choices:["Hak politik","Hak ekonomi","Hak sosial","Hak budaya"], a:0 }
+  ]
+};
+
+/* Jika mau pakai external JSON URL (format sama seperti questionPool), set null atau URL:
+   contoh: const EXTERNAL_QUEST_URL = "https://.../questions.json";
+   jika null maka pakai questionPool di atas.
+*/
+const EXTERNAL_QUEST_URL = null;
+
+/* ======= END KONFIGURASI ======= */
+
+const gridEl = document.getElementById('grid');
+const rollBtn = document.getElementById('rollBtn');
+const resetBtn = document.getElementById('resetBtn');
+const posText = document.getElementById('posText');
+const turnText = document.getElementById('turnText');
+
+const modal = document.getElementById('modal');
+const qTitle = document.getElementById('qTitle');
+const qMeta = document.getElementById('qMeta');
+const qText = document.getElementById('qText');
+const answersEl = document.getElementById('answers');
+const closeModal = document.getElementById('closeModal');
+
+let cells = [];
+let playerPos = 1;
+let playerTurn = 1;
+
+/* Build grid (snake-and-ladder numbering snaking) */
+function buildGrid(){
+  gridEl.innerHTML = '';
+  cells = [];
+  // create 10 rows of 10, but numbering alternates direction each row
+  let num = 100;
+  for(let r=0;r<10;r++){
+    let rowNums = [];
+    for(let c=0;c<10;c++){
+      rowNums.push(num--);
+    }
+    // reverse every other row visually to create snake pattern
+    if(r%2===1) rowNums.reverse();
+    for(let n of rowNums){
+      const div = document.createElement('div');
+      div.className = 'cell';
+      div.dataset.num = n;
+      div.innerHTML = `<div style="position:absolute;left:6px;top:6px;font-size:11px;color:#444">${n}</div>`;
+      // mark snakes and ladders
+      if(SNAKES[n]) div.dataset.snakeHead = "true";
+      if(Object.values(SNAKES).includes(n)) div.dataset.snakeTail = "true";
+      if(LADDERS[n]) div.dataset.ladderStart = "true";
+      if(Object.values(LADDERS).includes(n)) div.dataset.ladderEnd = "true";
+      gridEl.appendChild(div);
+      cells[n] = div;
+      // add click handler if snake head
+      if(SNAKES[n]){
+        div.style.cursor = 'pointer';
+        div.title = 'Klik untuk soal (jika mendarat di sini)';
+        // optional highlight icon
+        const icon = document.createElement('div');
+        icon.style.position='absolute';
+        icon.style.left='6px';
+        icon.style.bottom='6px';
+        icon.style.fontSize='12px';
+        icon.textContent='🐍';
+        div.appendChild(icon);
+      }
+      if(LADDERS[n]){
+        const iconL = document.createElement('div');
+        iconL.style.position='absolute';
+        iconL.style.right='6px';
+        iconL.style.bottom='6px';
+        iconL.style.fontSize='12px';
+        iconL.textContent='⤴️';
+        div.appendChild(iconL);
+      }
+    }
+  }
+}
+
+/* Draw player piece */
+function drawPlayer(){
+  // remove old
+  document.querySelectorAll('.piece').forEach(e=>e.remove());
+  const target = cells[playerPos];
+  if(!target) return;
+  const p = document.createElement('div');
+  p.className = 'piece player1';
+  p.textContent = '1';
+  target.appendChild(p);
+  posText.textContent = playerPos;
+}
+
+/* Roll dice */
+function rollDice(){
+  return Math.floor(Math.random()*6)+1;
+}
+
+/* Show modal question for snake head if mendarat and head exists */
+function maybeShowQuestion(pos){
+  if(SNAKES[pos]){
+    // get pool for this head
+    const key = String(pos);
+    let pool = questionPool[key] || [];
+    if(pool.length===0){
+      // fallback: no soal -> langsung turun
+      alert('Belum ada soal untuk kepala ular ini. Otomatis turun ke ekor.');
+      playerPos = SNAKES[pos];
+      drawPlayer();
+      return;
+    }
+    // pilih random soal
+    const q = pool[Math.floor(Math.random()*pool.length)];
+    openQuestionModal(pos, q);
+  }
+}
+
+/* modal handlers */
+function openQuestionModal(pos, q){
+  qTitle.textContent = `Soal untuk Kotak ${pos}`;
+  qMeta.textContent = `Jika benar: tetap. Jika salah: turun ke kotak ${SNAKES[pos]}.`;
+  qText.textContent = q.q;
+  answersEl.innerHTML = '';
+  q.choices.forEach((ch, idx)=>{
+    const b = document.createElement('button');
+    b.className = 'ans-btn';
+    b.textContent = ch;
+    b.onclick = ()=> {
+      if(idx === q.a){
+        // benar
+        closeQuestionModal();
+        // tetap
+        alert('Jawaban benar! Tetap di posisi.');
+      } else {
+        // salah -> turun
+        alert('Jawaban salah. Turun ke ekor ular.');
+        playerPos = SNAKES[pos];
+        closeQuestionModal();
+        drawPlayer();
+      }
+    };
+    answersEl.appendChild(b);
+  });
+  modal.style.display = 'flex';
+}
+function closeQuestionModal(){
+  modal.style.display = 'none';
+}
+
+/* main game controls */
+rollBtn.addEventListener('click',async ()=>{
+  rollBtn.disabled = true;
+  const d = rollDice();
+  alert('Dadu: ' + d);
+  let newPos = playerPos + d;
+  if(newPos>100) newPos = playerPos; // tidak bergeser jika melewati 100
+  playerPos = newPos;
+  drawPlayer();
+  // check ladder
+  if(LADDERS[playerPos]){
+    alert('Naik tangga ke ' + LADDERS[playerPos]);
+    playerPos = LADDERS[playerPos];
+    drawPlayer();
+  }
+  // if land on snake head -> show question
+  maybeShowQuestion(playerPos);
+  rollBtn.disabled = false;
+});
+
+resetBtn.addEventListener('click',()=>{
+  if(confirm('Reset permainan?')) {
+    playerPos = 1;
+    drawPlayer();
+  }
+});
+
+/* modal close */
+closeModal.addEventListener('click', ()=> modal.style.display='none');
+modal.addEventListener('click', (e)=>{ if(e.target===modal) modal.style.display='none' });
+
+/* load external questions if configured */
+async function loadExternalQuestions(){
+  if(!EXTERNAL_QUEST_URL) return;
+  try{
+    const res = await fetch(EXTERNAL_QUEST_URL);
+    const data = await res.json();
+    // minimal validation: data should be object with keys matching snake positions
+    questionPool = data;
+    console.log('Soal eksternal dimuat', questionPool);
+  }catch(e){
+    console.warn('Gagal ambil soal eksternal:', e);
+  }
+}
+
+/* init */
+(async function init(){
+  await loadExternalQuestions();
+  buildGrid();
+  drawPlayer();
+})();
+</script>
+</body>
+</html>
