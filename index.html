@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Game Ular Tangga Edukatif</title>
+<style>
+  body { font-family: Arial; background: #f8fff4; text-align: center; }
+  h1 { color: #4CAF50; }
+  .board { margin: 20px auto; width: 500px; position: relative; }
+  .sticky {
+    display: none;
+    position: fixed;
+    top: 30%;
+    left: 40%;
+    width: 250px;
+    padding: 20px;
+    background: #fff799;
+    border: 2px solid #ffd54f;
+    border-radius: 10px;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+  }
+  button { margin-top: 10px; padding: 8px 14px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; }
+  button:hover { background: #45a049; }
+</style>
+</head>
+<body>
+
+<h1>🎲 Game Ular Tangga Edukatif 🎲</h1>
+<p>Klik kepala ular untuk menjawab soal!</p>
+
+<div class="board">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/1/10/Snakes_and_Ladders.jpg" width="500" usemap="#map1">
+  <map name="map1">
+    <area shape="circle" coords="300,150,30" href="#" onclick="showSticky()">
+  </map>
+</div>
+
+<div class="sticky" id="note">
+  <p><b>Soal:</b><br>
+  Apa arti norma dalam kehidupan bermasyarakat?</p>
+  <button onclick="hideSticky()">Tutup</button>
+</div>
+
+<script>
+function showSticky() {
+  document.getElementById('note').style.display = 'block';
+}
+function hideSticky() {
+  document.getElementById('note').style.display = 'none';
+}
+</script>
+
+</body>
+</html>
